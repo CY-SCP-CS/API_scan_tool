@@ -1,0 +1,55 @@
+rules:
+  - id: api.java.runtime-exec
+    languages: [java]
+    severity: ERROR
+    message: HTTP-controlled command execution can lead to remote code execution.
+    metadata:
+      vulnerability: command_injection
+      route: /run
+      method: GET
+    pattern: Runtime.getRuntime().exec(...)
+  - id: api.java.sql-concat
+    languages: [java]
+    severity: WARNING
+    message: Dynamically concatenated SQL should use parameterized queries.
+    metadata:
+      vulnerability: sql_injection
+      route: /search
+      method: GET
+    pattern-regex: '(?s)(executeQuery|prepareStatement)\s*\(\s*"[^";]*"\s*\+'
+  - id: api.python.urlopen
+    languages: [python]
+    severity: ERROR
+    message: URL controlled by a request can create server-side request forgery.
+    metadata:
+      vulnerability: ssrf
+      route: /fetch
+      method: GET
+    pattern: urllib.request.urlopen(...)
+  - id: api.python.subprocess-shell
+    languages: [python]
+    severity: ERROR
+    message: shell=True with request data can lead to command injection.
+    metadata:
+      vulnerability: command_injection
+      route: /run
+      method: GET
+    pattern: subprocess.run(..., shell=True, ...)
+  - id: api.javascript-file-read
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Request-controlled file path can lead to path traversal.
+    metadata:
+      vulnerability: path_traversal
+      route: /file
+      method: GET
+    pattern: fs.readFileSync(...)
+  - id: api.javascript-child-process
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: child_process execution with request data can lead to command injection.
+    metadata:
+      vulnerability: command_injection
+      route: /run
+      method: GET
+    pattern: exec(...)

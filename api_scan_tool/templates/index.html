@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>API Scan Tool</title><link rel="stylesheet" href="/static/app.css"></head>
+<body>
+  <header><div><h1>API Scan Tool</h1><p>Semgrep → AI 复查 → 可选 Burp 验证</p></div><span id="health" class="badge">检查服务中</span></header>
+  <main>
+    <section class="card">
+      <h2>新建授权扫描</h2>
+      <p class="muted">密钥只从程序目录的 <code>.env</code> 文件或系统环境变量读取；浏览器不会接收、显示或保存密钥。</p>
+      <p class="muted">不勾选 Burp 时，只执行 Semgrep 和 AI 代码复查，绝不会向目标发送 HTTP 请求。</p>
+      <form id="scan-form">
+        <div class="grid">
+          <label>源码目录<input name="source_path" required placeholder="D:\project\service"></label>
+          <label>目标 URL（Burp 验证时必填）<input name="target_url" placeholder="http://127.0.0.1:9101"></label>
+          <fieldset class="model-picker">
+            <legend>AI 提供商</legend>
+            <div class="model-options provider-options">
+              <label class="model-option"><input type="radio" name="ai_provider" value="openai" checked><span><strong>OpenAI</strong><small>需要 OPENAI_API_KEY</small></span></label>
+              <label class="model-option"><input type="radio" name="ai_provider" value="deepseek"><span><strong>DeepSeek</strong><small>需要 DEEPSEEK_API_KEY</small></span></label>
+            </div>
+          </fieldset>
+          <fieldset class="model-picker">
+            <legend>AI 复查模型</legend>
+            <div class="model-options" data-models-for="openai">
+              <label class="model-option"><input type="radio" name="model" value="gpt-5.6-terra" checked><span><strong>推荐：Terra</strong><small>平衡能力和成本</small></span></label>
+              <label class="model-option"><input type="radio" name="model" value="gpt-5.6-luna"><span><strong>节省成本：Luna</strong><small>适合高频、轻量复查</small></span></label>
+              <label class="model-option"><input type="radio" name="model" value="gpt-5.6-sol"><span><strong>更深入：Sol</strong><small>适合复杂代码审查</small></span></label>
+            </div>
+            <div class="model-options" data-models-for="deepseek" hidden>
+              <label class="model-option"><input type="radio" name="model" value="deepseek-flash"><span><strong>DeepSeek Flash</strong><small>更快、更节省成本</small></span></label>
+              <label class="model-option"><input type="radio" name="model" value="deepseek-v4-pro"><span><strong>DeepSeek Pro</strong><small>更深入的代码复查</small></span></label>
+            </div>
+          </fieldset>
+          <label>允许列表（每行一个 host:port）<textarea name="allowlist" placeholder="127.0.0.1:9101&#10;api.example.com:443"></textarea></label>
+          <label>认证头（可选，每行 Header: value）<textarea name="headers" placeholder="Authorization: Bearer eyJ...&#10;X-API-Key: ..."></textarea></label>
+          <label>每分钟请求数<input name="rate_limit_per_minute" type="number" value="12" min="1" max="60"></label>
+          <label>每项最大请求<input name="max_requests_per_finding" type="number" value="2" min="1" max="5"></label>
+        </div>
+        <fieldset><legend>扫描语言</legend><label><input type="checkbox" name="languages" value="java" checked> Java</label><label><input type="checkbox" name="languages" value="python" checked> Python</label><label><input type="checkbox" name="languages" value="javascript" checked> JavaScript</label></fieldset>
+        <fieldset><legend><label><input id="use-burp" type="checkbox" name="use_burp"> 启用 Burp Suite 抓包和受控验证（可选）</label></legend><p class="muted">仅勾选后才连接 Burp 并向允许列表内的 URL 发请求。请先在 Burp Proxy 中关闭 Intercept，避免任务卡住。</p><div class="grid" id="burp-settings"><label>Burp 主机<input name="burp_host" value="127.0.0.1"></label><label>Burp 端口<input name="burp_port" type="number" value="8080" min="1" max="65535"></label><label>Burp CA PEM（仅 HTTPS 需要）<input name="burp_ca_path" placeholder="C:\certs\burp-ca.pem"></label></div></fieldset>
+        <label class="confirm"><input type="checkbox" name="confirm_authorized"> 我确认已获得授权；若启用 Burp，可对上述目标执行受控安全验证。</label><p id="form-error" role="alert"></p><button type="submit">启动扫描</button>
+      </form>
+    </section>
+    <section class="card" id="task-section" hidden><div class="section-title"><h2>任务状态</h2><span id="status" class="badge"></span></div><p id="task-id"></p><div class="progress"><div id="progress-bar"></div></div><ul id="events" aria-live="polite"></ul><p id="task-error" role="alert"></p><div id="reports" hidden><a id="json-report">JSON</a><a id="html-report">HTML</a><a id="sarif-report">SARIF</a></div></section>
+    <section class="card" id="finding-section" hidden><div class="section-title"><h2>发现的问题</h2><div><select id="severity-filter"><option value="">所有严重度</option><option>ERROR</option><option>WARNING</option></select><select id="status-filter"><option value="">所有验证状态</option><option>confirmed</option><option>captured</option><option>skipped</option></select></div></div><div class="table-wrap"><table><thead><tr><th>严重度</th><th>类别</th><th>位置</th><th>AI 结论</th><th>验证</th></tr></thead><tbody id="findings"></tbody></table></div><article id="detail" hidden></article></section>
+    <section class="card"><h2>历史任务</h2><div class="table-wrap"><table><thead><tr><th>任务</th><th>状态</th><th>扫描目录</th><th>报告</th></tr></thead><tbody id="history"><tr><td colspan="4">正在读取…</td></tr></tbody></table></div></section>
+  </main>
+  <footer>仅供已授权的安全测试使用。认证头仅用于受控验证请求，任务与报告中不会保存其值。</footer><script src="/static/app.js"></script>
+</body>
+</html>

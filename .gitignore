@@ -1,0 +1,22 @@
+# Secrets: never commit real credentials. The example template is safe to keep.
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+
+.venv/
+__pycache__/
+.pytest_cache/
+runs/
+*.class
+build_exe/
+release/
+packaging_stage/
+build_logs/
