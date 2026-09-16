@@ -50,6 +50,17 @@ def test_deepseek_provider_accepts_only_deepseek_models(tmp_path: Path):
     assert response.status_code == 422
 
 
+def test_openapi_mode_requires_burp_and_authorization(tmp_path: Path):
+    app = create_app(JobManager(tmp_path))
+    payload = {"scan_mode": "openapi", "target_url": "http://127.0.0.1:9101", "allowlist": ["127.0.0.1:9101"]}
+    async def request():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            return await client.post("/api/jobs", json=payload)
+    response = asyncio.run(request())
+    assert response.status_code == 400
+    assert "Burp" in response.json()["detail"]
+
+
 def test_completed_jobs_reload_from_disk(tmp_path: Path):
     runs = tmp_path / "persisted"; runs.mkdir()
     task = runs / "old-run"; task.mkdir()

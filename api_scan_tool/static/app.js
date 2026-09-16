@@ -2,13 +2,28 @@ const $ = (selector) => document.querySelector(selector);
 let activeJob = null;
 let activeFindings = [];
 let healthInfo = null;
-const progress = {queued: 5, semgrep: 30, ai_review: 60, validation: 82, report: 95, completed: 100, failed: 100};
+const progress = {queued: 5, semgrep: 30, openapi: 30, blackbox: 52, ai_review: 65, validation: 82, report: 95, completed: 100, failed: 100};
 
 function lines(value) { return value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean); }
 function headers(value) { return Object.fromEntries(lines(value).map((line) => { const i = line.indexOf(':'); return i > 0 ? [line.slice(0, i).trim(), line.slice(i + 1).trim()] : null; }).filter(Boolean)); }
 function escape(text) { const el = document.createElement('span'); el.textContent = text ?? ''; return el.innerHTML; }
 function selectedProvider() { return document.querySelector('input[name="ai_provider"]:checked').value; }
+function selectedMode() { return document.querySelector('input[name="scan_mode"]:checked').value; }
 function setBurpFields() { const enabled = $('#use-burp').checked; $('#burp-settings').querySelectorAll('input').forEach((input) => { input.disabled = !enabled; }); }
+function setScanMode() {
+  const blackbox = selectedMode() === 'openapi';
+  $('#source-path-field').hidden = blackbox; $('#source-path-field input').disabled = blackbox; $('#source-path-field input').required = !blackbox;
+  $('#openapi-url-field').hidden = !blackbox; $('#openapi-url-field input').disabled = !blackbox;
+  $('#blackbox-limit-field').hidden = !blackbox; $('#blackbox-limit-field input').disabled = !blackbox;
+  $('#languages-section').hidden = blackbox; $('#languages-section').querySelectorAll('input').forEach((input) => { input.disabled = blackbox; });
+  $('#target-url-note').textContent = blackbox ? '（黑盒扫描必填）' : '（Burp 验证时必填）';
+  $('#scan-mode-help').textContent = blackbox ? '黑盒模式必须启用 Burp、填写允许列表并确认已获授权。工具只访问 OpenAPI 文档和少量无需参数的 GET/HEAD 接口，不猜测路径或参数。' : '源码模式不会访问目标，除非你启用 Burp 验证。';
+  $('#burp-label').textContent = blackbox ? '已启用：Burp Suite 抓包（黑盒扫描必需）' : '启用 Burp Suite 抓包和受控验证（可选）';
+  $('#burp-help').textContent = blackbox ? '黑盒扫描所有网络请求都会经 Burp 发送。请先在 Burp Proxy 中关闭 Intercept，避免任务卡住。' : '仅勾选后才连接 Burp 并向允许列表内的 URL 发请求。请先在 Burp Proxy 中关闭 Intercept，避免任务卡住。';
+  if (blackbox) $('#use-burp').checked = true;
+  $('#use-burp').disabled = blackbox;
+  setBurpFields();
+}
 function setHealth() {
   if (!healthInfo) return;
   const provider = selectedProvider();
@@ -35,16 +50,17 @@ function showDetail(id) { const f = activeFindings.find((item) => item.id === id
 function setEvent(event) { $('#status').textContent = event.stage; $('#progress-bar').style.width = `${progress[event.stage] ?? 10}%`; const item = document.createElement('li'); item.textContent = `[${event.stage}] ${event.message}`; $('#events').append(item); $('#events').scrollTop = $('#events').scrollHeight; }
 async function loadJob() { const response = await fetch(`/api/jobs/${activeJob}`); const job = await response.json(); activeFindings = job.findings; $('#finding-section').hidden = false; renderFindings(); if (job.error) $('#task-error').textContent = job.error; if (job.status === 'completed' || job.status === 'failed') { ['json', 'html', 'sarif'].forEach((kind) => { $(`#${kind}-report`).href = `/api/jobs/${activeJob}/reports/${kind}`; }); $('#reports').hidden = false; } }
 function streamJob(id) { const source = new EventSource(`/api/jobs/${id}/events`); source.onmessage = (event) => setEvent(JSON.parse(event.data)); source.addEventListener('done', async () => { source.close(); await loadJob(); await loadHistory(); }); source.onerror = () => { source.close(); loadJob(); }; }
-async function loadHistory() { try { const jobs = await (await fetch('/api/jobs')).json(); $('#history').innerHTML = jobs.map((job) => `<tr><td>${escape(job.id)}</td><td>${escape(job.status)}</td><td>${escape(job.config.source_path)}</td><td>${job.report_paths.html ? `<a href="/api/jobs/${job.id}/reports/html">HTML</a> · <a href="/api/jobs/${job.id}/reports/sarif">SARIF</a>` : '—'}</td></tr>`).join('') || '<tr><td colspan="4">没有已保存的任务</td></tr>'; } catch (_) { $('#history').innerHTML = '<tr><td colspan="4">无法读取历史任务</td></tr>'; } }
+async function loadHistory() { try { const jobs = await (await fetch('/api/jobs')).json(); $('#history').innerHTML = jobs.map((job) => { const scope = job.config.scan_mode === 'openapi' ? `OpenAPI 黑盒：${job.config.target_url}` : job.config.source_path; return `<tr><td>${escape(job.id)}</td><td>${escape(job.status)}</td><td>${escape(scope)}</td><td>${job.report_paths.html ? `<a href="/api/jobs/${job.id}/reports/html">HTML</a> · <a href="/api/jobs/${job.id}/reports/sarif">SARIF</a>` : '—'}</td></tr>`; }).join('') || '<tr><td colspan="4">没有已保存的任务</td></tr>'; } catch (_) { $('#history').innerHTML = '<tr><td colspan="4">无法读取历史任务</td></tr>'; } }
 
 $('#scan-form').addEventListener('submit', async (event) => {
   event.preventDefault(); $('#form-error').textContent = ''; $('#events').innerHTML = ''; $('#task-error').textContent = '';
   const form = new FormData(event.currentTarget); const payload = Object.fromEntries(form.entries());
-  payload.languages = [...document.querySelectorAll('input[name="languages"]:checked')].map((input) => input.value); payload.allowlist = lines(form.get('allowlist') || ''); payload.headers = headers(form.get('headers') || ''); payload.confirm_authorized = form.get('confirm_authorized') === 'on'; payload.use_burp = form.get('use_burp') === 'on';
-  ['rate_limit_per_minute', 'max_requests_per_finding'].forEach((key) => { payload[key] = Number(payload[key]); }); if (payload.use_burp) payload.burp_port = Number(payload.burp_port);
+  payload.languages = [...document.querySelectorAll('input[name="languages"]:checked')].map((input) => input.value); payload.allowlist = lines(form.get('allowlist') || ''); payload.headers = headers(form.get('headers') || ''); payload.confirm_authorized = form.get('confirm_authorized') === 'on'; payload.use_burp = selectedMode() === 'openapi' || form.get('use_burp') === 'on';
+  ['rate_limit_per_minute', 'max_requests_per_finding', 'blackbox_max_operations'].forEach((key) => { if (payload[key] !== undefined) payload[key] = Number(payload[key]); }); if (payload.use_burp) payload.burp_port = Number(payload.burp_port);
   try { const response = await fetch('/api/jobs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)}); const body = await response.json(); if (!response.ok) throw new Error(body.detail || '无法创建任务'); activeJob = body.id; $('#task-section').hidden = false; $('#task-id').textContent = `任务 ID：${activeJob}`; setEvent({stage: 'queued', message: '任务已加入队列'}); streamJob(activeJob); } catch (error) { $('#form-error').textContent = error.message; }
 });
 $('#severity-filter').onchange = renderFindings; $('#status-filter').onchange = renderFindings; $('#use-burp').onchange = setBurpFields; document.querySelectorAll('input[name="ai_provider"]').forEach((input) => { input.onchange = setProvider; });
-setBurpFields(); setProvider();
+document.querySelectorAll('input[name="scan_mode"]').forEach((input) => { input.onchange = setScanMode; });
+setScanMode(); setProvider();
 fetch('/api/health').then((r) => r.json()).then((data) => { healthInfo = data; setHealth(); }).catch(() => { $('#health').textContent = '服务异常'; });
 loadHistory();

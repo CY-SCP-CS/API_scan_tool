@@ -7,11 +7,15 @@
     <section class="card">
       <h2>新建授权扫描</h2>
       <p class="muted">密钥只从程序目录的 <code>.env</code> 文件或系统环境变量读取；浏览器不会接收、显示或保存密钥。</p>
-      <p class="muted">不勾选 Burp 时，只执行 Semgrep 和 AI 代码复查，绝不会向目标发送 HTTP 请求。</p>
+      <p class="muted">源码模式不勾选 Burp 时，只执行 Semgrep 和 AI 代码复查，绝不会向目标发送 HTTP 请求。</p>
       <form id="scan-form">
+        <fieldset class="scan-mode-picker"><legend>扫描方式</legend><div class="model-options provider-options"><label class="model-option"><input type="radio" name="scan_mode" value="source" checked><span><strong>有源码：Semgrep + AI</strong><small>扫描 Java、Python、JavaScript 源码；Burp 验证可选。</small></span></label><label class="model-option"><input type="radio" name="scan_mode" value="openapi"><span><strong>无源码：OpenAPI 黑盒</strong><small>通过 Burp 读取 OpenAPI 文档，只请求文档中无需参数的 GET/HEAD 接口。</small></span></label></div></fieldset>
+        <p id="scan-mode-help" class="muted">源码模式不会访问目标，除非你启用 Burp 验证。</p>
         <div class="grid">
-          <label>源码目录<input name="source_path" required placeholder="D:\project\service"></label>
-          <label>目标 URL（Burp 验证时必填）<input name="target_url" placeholder="http://127.0.0.1:9101"></label>
+          <label id="source-path-field">源码目录<input name="source_path" required placeholder="D:\project\service"></label>
+          <label>目标 URL<span class="field-note" id="target-url-note">（Burp 验证时必填）</span><input name="target_url" placeholder="http://127.0.0.1:9101"></label>
+          <label id="openapi-url-field" hidden>OpenAPI 文档地址（可选）<input name="openapi_url" placeholder="留空时尝试 http://127.0.0.1:9101/openapi.json"><small>必须同样位于允许列表；支持 JSON 或 YAML。</small></label>
+          <label id="blackbox-limit-field" hidden>黑盒最多读取接口数<input name="blackbox_max_operations" type="number" value="3" min="1" max="10"><small>只尝试无必填参数的 GET/HEAD；OpenAPI 文档请求也计入每分钟上限。</small></label>
           <fieldset class="model-picker">
             <legend>AI 提供商</legend>
             <div class="model-options provider-options">
@@ -36,8 +40,8 @@
           <label>每分钟请求数<input name="rate_limit_per_minute" type="number" value="12" min="1" max="60"></label>
           <label>每项最大请求<input name="max_requests_per_finding" type="number" value="2" min="1" max="5"></label>
         </div>
-        <fieldset><legend>扫描语言</legend><label><input type="checkbox" name="languages" value="java" checked> Java</label><label><input type="checkbox" name="languages" value="python" checked> Python</label><label><input type="checkbox" name="languages" value="javascript" checked> JavaScript</label></fieldset>
-        <fieldset><legend><label><input id="use-burp" type="checkbox" name="use_burp"> 启用 Burp Suite 抓包和受控验证（可选）</label></legend><p class="muted">仅勾选后才连接 Burp 并向允许列表内的 URL 发请求。请先在 Burp Proxy 中关闭 Intercept，避免任务卡住。</p><div class="grid" id="burp-settings"><label>Burp 主机<input name="burp_host" value="127.0.0.1"></label><label>Burp 端口<input name="burp_port" type="number" value="8080" min="1" max="65535"></label><label>Burp CA PEM（仅 HTTPS 需要）<input name="burp_ca_path" placeholder="C:\certs\burp-ca.pem"></label></div></fieldset>
+        <fieldset id="languages-section"><legend>扫描语言</legend><label><input type="checkbox" name="languages" value="java" checked> Java</label><label><input type="checkbox" name="languages" value="python" checked> Python</label><label><input type="checkbox" name="languages" value="javascript" checked> JavaScript</label></fieldset>
+        <fieldset><legend><label><input id="use-burp" type="checkbox" name="use_burp"> <span id="burp-label">启用 Burp Suite 抓包和受控验证（可选）</span></label></legend><p class="muted" id="burp-help">仅勾选后才连接 Burp 并向允许列表内的 URL 发请求。请先在 Burp Proxy 中关闭 Intercept，避免任务卡住。</p><div class="grid" id="burp-settings"><label>Burp 主机<input name="burp_host" value="127.0.0.1"></label><label>Burp 端口<input name="burp_port" type="number" value="8080" min="1" max="65535"></label><label>Burp CA PEM（仅 HTTPS 需要）<input name="burp_ca_path" placeholder="C:\certs\burp-ca.pem"></label></div></fieldset>
         <label class="confirm"><input type="checkbox" name="confirm_authorized"> 我确认已获得授权；若启用 Burp，可对上述目标执行受控安全验证。</label><p id="form-error" role="alert"></p><button type="submit">启动扫描</button>
       </form>
     </section>

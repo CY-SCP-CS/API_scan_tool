@@ -1,6 +1,6 @@
 # API Scan Tool
 
-这是一个只监听本机的 API 安全检查工具：先用 Semgrep 扫描 Java、Python、JavaScript 源码，再用 OpenAI 或 DeepSeek 复查命中；最后可选地经 Burp Suite 发送少量、受控的验证请求并生成报告。
+这是一个只监听本机的 API 安全检查工具，提供两种模式：有源码时用 Semgrep 扫描 Java、Python、JavaScript 后交给 OpenAI 或 DeepSeek 复查；没有源码、但有 OpenAPI 文档时，可经 Burp Suite 执行受控的 OpenAPI 黑盒检查并生成报告。
 
 默认只运行“源码扫描 + AI 复查”。**Burp 是可选的**，没有安装或没有启动 Burp 也能正常扫描；未启用 Burp 时工具不会向任何目标 URL 发送请求。
 
@@ -27,8 +27,11 @@
 
 | 项目 | 何时填写 | 示例 |
 | --- | --- | --- |
-| 源码目录 | 每次必填 | `D:\project\my-service` |
+| 扫描方式 | 每次选择 | 有源码：Semgrep + AI；无源码：OpenAPI 黑盒 |
+| 源码目录 | 仅“有源码”模式必填 | `D:\project\my-service` |
 | 目标 URL | 仅启用 Burp 验证时必填 | `http://127.0.0.1:9101` |
+| OpenAPI 文档地址 | 仅“无源码”模式；可选 | 留空时使用 `<目标 URL>/openapi.json`；也可填写 `https://api.example.com/docs/openapi.yaml` |
+| 黑盒最多读取接口数 | 仅“无源码”模式 | `3`，范围为 1–10 |
 | AI 提供商与模型 | 直接点击卡片选择 | OpenAI（Terra/Luna/Sol）或 DeepSeek（Flash/Pro） |
 | 允许列表 | 仅启用 Burp 时必填 | `127.0.0.1:9101` 或 `api.example.com:443` |
 | 认证头 | 目标 API 需要登录时才填写 | `Authorization: Bearer <token>` |
@@ -54,6 +57,26 @@
 5. 勾选已获授权确认框，再启动扫描。
 
 开启 Burp 后，工具仅对允许列表内的地址发送数量受限的无副作用探测；外部目标不会执行写入、删除、爆破、拒绝服务、内网/元数据探测或命令执行。重定向到允许列表外也会被拒绝。
+
+## 没有源码时：OpenAPI 黑盒扫描
+
+适用于你没有代码仓库、但拥有目标 API 的明确测试授权和 OpenAPI/Swagger 文档的情况。它不是“全自动攻击器”：OpenAPI 描述只能说明接口的输入面，不能单凭描述证明漏洞。
+
+1. 选择网页中的“**无源码：OpenAPI 黑盒**”。源码目录和语言选择会自动隐藏。
+2. 填写 API 基础地址，例如 `https://api.example.com`。
+3. 填写 OpenAPI 文档地址；若不填，工具会请求 `https://api.example.com/openapi.json`。支持 JSON 和 YAML。
+4. 在允许列表添加目标及文档的 `host:port`，例如 `api.example.com:443`。文档若位于另一台允许的主机，也需单独加入。
+5. 填写测试认证头（如果文档或接口需要登录）、配置 Burp，并勾选“我确认已获得授权”。HTTPS 目标还必须填写受信任的 Burp CA PEM 路径。
+6. 点击“启动扫描”。
+
+黑盒模式**强制经 Burp**，并且只会：
+
+- 请求一份不超过 1 MB 的 OpenAPI 文档；
+- 从文档中识别 URL/回调、重定向、文件路径类输入，以及敏感路径缺少安全声明等“需要复核的候选项”；
+- 最多访问你设置数量的、文档明确列出的、无必填参数的 `GET` 或 `HEAD` 接口；不会猜路径、猜参数、提交请求体，也不会调用 `POST`、`PUT`、`PATCH` 或 `DELETE`；
+- 在报告中仅保留请求 URL、HTTP 状态、响应类型和长度等摘要，不保存响应正文。
+
+报告里的 `api_surface` 表示“已抓取的 API 接口面”，不是漏洞；`WARNING` 候选项仍需要 AI 结论和人工证据复核。若 API 没有 OpenAPI 文档，也没有源码，当前版本会安全拒绝扫描，而不是盲目枚举或探测未知路径。
 
 ## 内置本地演示：确实有目标 URL
 
@@ -96,6 +119,7 @@ python -m api_scan_tool web
 ```powershell
 python -m api_scan_tool run --source .\examples\python_vulnerable
 python -m api_scan_tool run --source .\examples\python_vulnerable --target http://127.0.0.1:9101 --allow 127.0.0.1:9101 --use-burp --confirm-authorized
+python -m api_scan_tool openapi --target https://api.example.com --openapi-url https://api.example.com/openapi.json --allow api.example.com:443 --confirm-authorized --burp-ca C:\certs\burp-ca.pem
 ```
 
 网页使用固定的提供商与模型选择，不要求设置 `OPENAI_MODEL`。CLI 使用 DeepSeek 的示例：`python -m api_scan_tool run --source .\examples\python_vulnerable --ai-provider deepseek --model deepseek-flash`。

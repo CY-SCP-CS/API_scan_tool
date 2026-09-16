@@ -6,8 +6,10 @@ from typing import Any
 
 @dataclass
 class RunConfig:
-    source_path: str
+    source_path: str = ""
+    scan_mode: str = "source"
     target_url: str = ""
+    openapi_url: str = ""
     languages: list[str] = field(default_factory=lambda: ["java", "python", "javascript"])
     allowlist: list[str] = field(default_factory=list)
     headers: dict[str, str] = field(default_factory=dict)
@@ -17,6 +19,7 @@ class RunConfig:
     burp_ca_path: str = ""
     rate_limit_per_minute: int = 12
     max_requests_per_finding: int = 2
+    blackbox_max_operations: int = 3
     ai_provider: str = "openai"
     model: str = "gpt-5.6-terra"
     confirm_authorized: bool = False
@@ -49,6 +52,8 @@ class Finding:
     route: str = "/"
     method: str = "GET"
     context: str = ""
+    review_required: bool = True
+    active_validation_allowed: bool = True
     ai: dict[str, Any] = field(default_factory=dict)
     validation: dict[str, Any] = field(default_factory=dict)
 

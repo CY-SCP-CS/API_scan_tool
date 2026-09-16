@@ -37,12 +37,14 @@ fieldset input[type="checkbox"], fieldset input[type="radio"], .confirm input { 
 
 /* AI widgets must take enough horizontal room; never compress cards into a thin column. */
 .model-picker { grid-column: span 2; width: 100%; margin: 0; background: color-mix(in srgb, var(--surface-raised) 78%, transparent); }
+.scan-mode-picker { width: 100%; margin: 1rem 0; background: color-mix(in srgb, var(--surface-raised) 78%, transparent); }
 .model-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .7rem; }
 .provider-options { grid-template-columns: repeat(2, minmax(190px, 1fr)); }
 .model-option { display: flex !important; flex-direction: row !important; align-items: flex-start !important; gap: .6rem !important; min-height: 5.35rem; margin: 0 !important; padding: .75rem !important; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface); cursor: pointer; overflow: hidden; }
 .model-option span { display: grid; gap: .18rem; min-width: 0; }
 .model-option strong { font-size: 1rem; overflow-wrap: anywhere; }
 .model-option small { color: var(--muted); line-height: 1.38; overflow-wrap: anywhere; }
+.field-note { display: inline; color: var(--muted); font-weight: 500; }
 .model-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 
 .confirm { display: flex; flex-direction: row; align-items: center; gap: .55rem; margin: 1rem 0; font-weight: 500; }

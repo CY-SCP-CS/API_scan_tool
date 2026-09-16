@@ -22,8 +22,10 @@ manager = JobManager()
 
 
 class RunPayload(BaseModel):
-    source_path: str
+    source_path: str = ""
+    scan_mode: Literal["source", "openapi"] = "source"
     target_url: str = ""
+    openapi_url: str = ""
     languages: list[str] = Field(default_factory=lambda: ["java", "python", "javascript"])
     allowlist: list[str] = Field(default_factory=list)
     headers: dict[str, str] = Field(default_factory=dict)
@@ -33,6 +35,7 @@ class RunPayload(BaseModel):
     burp_ca_path: str = ""
     rate_limit_per_minute: int = 12
     max_requests_per_finding: int = 2
+    blackbox_max_operations: int = 3
     ai_provider: Literal["openai", "deepseek"] = "openai"
     model: Literal["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol", "deepseek-flash", "deepseek-v4-pro"] = "gpt-5.6-terra"
     confirm_authorized: bool = False
@@ -46,6 +49,8 @@ class RunPayload(BaseModel):
         }
         if self.model not in allowed[self.ai_provider]:
             raise ValueError("the selected model does not belong to the selected AI provider")
+        if self.scan_mode == "source" and not self.source_path.strip():
+            raise ValueError("source_path is required for source scanning")
         return self
 
     def config(self) -> RunConfig:

@@ -19,8 +19,10 @@ from .web import create_app
 
 def _common_config(args: argparse.Namespace) -> RunConfig:
     return RunConfig(
-        source_path=args.source,
+        source_path=getattr(args, "source", ""),
+        scan_mode=getattr(args, "scan_mode", "source"),
         target_url=args.target or "",
+        openapi_url=getattr(args, "openapi_url", "") or "",
         allowlist=args.allow or [],
         ai_provider=args.ai_provider,
         model=args.model or ("deepseek-flash" if args.ai_provider == "deepseek" else ""),
@@ -29,6 +31,7 @@ def _common_config(args: argparse.Namespace) -> RunConfig:
         burp_host=args.burp_host,
         burp_port=args.burp_port,
         burp_ca_path=args.burp_ca or "",
+        blackbox_max_operations=getattr(args, "blackbox_max_operations", 3),
     )
 
 
@@ -90,6 +93,7 @@ def main() -> None:
     web.set_defaults(handler=_web)
     run = sub.add_parser("run", help="Run a scan from the command line")
     run.add_argument("--source", required=True)
+    run.set_defaults(scan_mode="source")
     run.add_argument("--target")
     run.add_argument("--allow", action="append", help="allowed host:port; repeatable")
     run.add_argument("--ai-provider", choices=["openai", "deepseek"], default="openai")
@@ -100,6 +104,18 @@ def main() -> None:
     run.add_argument("--burp-port", default=8080, type=int)
     run.add_argument("--burp-ca")
     run.set_defaults(handler=_run)
+    blackbox = sub.add_parser("openapi", help="Run an authorized, read-only OpenAPI black-box scan through Burp")
+    blackbox.add_argument("--target", required=True, help="API base URL")
+    blackbox.add_argument("--openapi-url", help="OpenAPI JSON/YAML URL; defaults to <target>/openapi.json")
+    blackbox.add_argument("--allow", action="append", required=True, help="allowed host:port; repeatable")
+    blackbox.add_argument("--ai-provider", choices=["openai", "deepseek"], default="openai")
+    blackbox.add_argument("--model", help="OpenAI or DeepSeek model selected for the provider")
+    blackbox.add_argument("--confirm-authorized", action="store_true", help="required before any OpenAPI request is sent")
+    blackbox.add_argument("--burp-host", default="127.0.0.1")
+    blackbox.add_argument("--burp-port", default=8080, type=int)
+    blackbox.add_argument("--burp-ca", help="Burp CA PEM path for HTTPS")
+    blackbox.add_argument("--blackbox-max-operations", default=3, type=int, help="1-10 documented GET/HEAD operations to capture")
+    blackbox.set_defaults(handler=_run, scan_mode="openapi", use_burp=True, source="")
     demo = sub.add_parser("demo", help="Start deliberately vulnerable local demos")
     demo.set_defaults(handler=_demo)
     args = parser.parse_args()

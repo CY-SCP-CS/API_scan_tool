@@ -10,6 +10,7 @@ from typing import Any
 from .ai_review import review
 from .engine import scan
 from .models import Finding, Job, RunConfig
+from .openapi_scan import scan_openapi
 from .reports import write_reports
 from .safety import validate_config
 from .validation import validate
@@ -68,13 +69,27 @@ class JobManager:
     def _run(self, job: Job) -> None:
         job.status = "running"
         try:
-            findings = scan(job.config, lambda stage, message, data: self._emit(job, stage, message, data))
+            scanner = scan_openapi if job.config.scan_mode == "openapi" else scan
+            findings = scanner(job.config, lambda stage, message, data: self._emit(job, stage, message, data))
             job.findings = findings
             for finding in job.findings:
+                if not finding.review_required:
+                    finding.ai = {
+                        "confirmed": False,
+                        "confidence": 0,
+                        "summary": "Documented API surface captured with a read-only request; this is not a vulnerability conclusion.",
+                        "impact": "No active vulnerability payload was sent.",
+                        "recommended_fix": "Review the endpoint's authorization and input validation controls as appropriate.",
+                        "poc_kind": "none",
+                    }
+                    continue
                 finding.ai = review(finding, job.config, lambda stage, message, data: self._emit(job, stage, message, data))
             if job.config.use_burp:
                 self._emit(job, "validation", "Checking Burp and validating reviewed findings", {})
                 for finding in job.findings:
+                    if not finding.active_validation_allowed:
+                        finding.validation = {"status": "skipped", "reason": "This OpenAPI operation is not GET/HEAD; no active request will be sent"}
+                        continue
                     if not finding.ai.get("confirmed", False):
                         finding.validation = {"status": "skipped", "reason": "AI marked this finding as unlikely"}
                         continue
