@@ -17,6 +17,11 @@ __pycache__/
 runs/
 *.class
 build_exe/
+build_codecheck/
 release/
 packaging_stage/
 build_logs/
+codeCheck.zip
+
+# Recoverable metadata from the imported codeCheck prototype.
+codeCheck/.codeCheck-git-metadata-backup/

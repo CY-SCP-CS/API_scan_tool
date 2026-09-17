@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Code Check · AI 源码审查</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="eyebrow">LOCAL AI CODE REVIEW</p><h1>Code Check</h1><p>选择源码目录，AI 自动生成未登录接口访问审查 Markdown 报告。</p></div>
+      <span id="key-status" class="badge">检查密钥配置中…</span>
+    </header>
+    <section class="card">
+      <h2>新建源码审查</h2>
+      <p class="hint">仅分析本机源码目录；不访问业务 URL、不需要 Burp、不执行动态攻击。密钥仅从 EXE 同目录的 <code>.env</code> 或系统环境变量读取。</p>
+      <form id="review-form">
+        <label>源码目录<input name="source_path" required placeholder="D:\project\service"></label>
+        <div class="two-col">
+          <label>AI 提供商<select id="provider" name="ai_provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></label>
+          <label>审查模型<select id="model" name="model"></select></label>
+        </div>
+        <p id="form-error" role="alert"></p><button id="submit" type="submit">开始 AI 审查</button>
+      </form>
+    </section>
+    <section id="progress-card" class="card" hidden>
+      <div class="title-row"><h2>审查进度</h2><span id="status" class="badge"></span></div>
+      <p id="task-id"></p><ul id="events"></ul><p id="task-error" role="alert"></p>
+    </section>
+    <section id="report-card" class="card" hidden>
+      <div class="title-row"><h2>最终 Markdown 报告</h2><a id="download" download>下载 .md</a></div><pre id="report"></pre>
+    </section>
+  </main>
+  <footer>仅用于已获授权的代码审查。不会将 API Key 写入报告或日志。</footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

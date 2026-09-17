@@ -1,163 +1,56 @@
-# API Scan Tool
+# Code Check · AI 源码审查
 
-这是一个只监听本机的 API 安全检查工具，提供两种模式：有源码时用 Semgrep 扫描 Java、Python、JavaScript 后交给 OpenAI 或 DeepSeek 复查；没有源码、但有 OpenAPI 文档时，可经 Burp Suite 执行受控的 OpenAPI 黑盒检查并生成报告。
+当前 `ai-source-review` 分支是一个只监听 `127.0.0.1` 的纯 AI 源码审查工具。它专门审查“未登录即可访问受限接口”问题，并输出最终 Markdown 报告。
 
-默认只运行“源码扫描 + AI 复查”。**Burp 是可选的**，没有安装或没有启动 Burp 也能正常扫描；未启用 Burp 时工具不会向任何目标 URL 发送请求。
+完整的“源码扫描 + OpenAPI 黑盒 + Burp”工具保留在 `full-api-scan` 分支。
 
-仅用于你拥有或已经获得明确授权的代码和目标。
+## 最简单的使用方式
 
-## 最简单的使用方法：EXE
-
-1. 打开 `release\API-Scan-Tool` 文件夹。不要只复制其中的 `API-Scan-Tool.exe`，同目录的 `_internal` 和 `semgrep` 文件夹也必须保留。
-2. 将 `.env.example` 复制一份并重命名为 `.env`。
-3. 用记事本打开 `.env`。根据网页中选择的 AI 提供商，填写对应的一行 API Key：
+1. 在 EXE 文件夹内将 `.env.example` 复制为 `.env`。首次启动 EXE 时也会自动创建这个仅含占位符的 `.env` 文件。
+2. 填写一个提供商的密钥：
 
    ```text
-   OPENAI_API_KEY=你的_OpenAI_API_Key
-   DEEPSEEK_API_KEY=你的_DeepSeek_API_Key
+   OPENAI_API_KEY=你的_OpenAI_Key
+   # 或
+   DEEPSEEK_API_KEY=你的_DeepSeek_Key
    ```
 
-   OpenAI Key 在 [OpenAI API Keys 页面](https://platform.openai.com/api-keys) 创建和管理；DeepSeek Key 在 [DeepSeek 平台](https://platform.deepseek.com/api_keys) 创建和管理。只需要填写你实际选择的提供商对应的 Key。不要把 `.env` 发给别人，也不要把它提交到 Git。
-4. 双击 `API-Scan-Tool.exe`。浏览器会打开 `http://127.0.0.1:8765`。
-5. 填写“源码目录”，选择语言和模型，然后点击“启动扫描”。第一次使用可保持 Burp 不勾选。
+3. 双击 `Code-Check.exe`，浏览器会打开 `http://127.0.0.1:8787`。
+4. 填写待审查源码的绝对路径，选择提供商和模型，点击“开始 AI 审查”。
+5. 审查完成后下载最终 `.md` 报告。
 
-网页顶部会显示当前选中提供商的 Key 是否已配置。若显示缺少 Key，请确认 `.env` 与 EXE 在同一个文件夹，文件名不是 `.env.txt`，并重启程序。
+密钥不会被写入报告、日志或 Git；不要把 `.env` 发送给他人。EXE 不硬编码真实 API Key，因为任何取得 EXE 的人都能提取其中的密钥。
 
-## 网页表单逐项说明
+## 审查范围与隐私
 
-| 项目 | 何时填写 | 示例 |
-| --- | --- | --- |
-| 扫描方式 | 每次选择 | 有源码：Semgrep + AI；无源码：OpenAPI 黑盒 |
-| 源码目录 | 仅“有源码”模式必填 | `D:\project\my-service` |
-| 目标 URL | 仅启用 Burp 验证时必填 | `http://127.0.0.1:9101` |
-| OpenAPI 文档地址 | 仅“无源码”模式；可选 | 留空时使用 `<目标 URL>/openapi.json`；也可填写 `https://api.example.com/docs/openapi.yaml` |
-| 黑盒最多读取接口数 | 仅“无源码”模式 | `3`，范围为 1–10 |
-| AI 提供商与模型 | 直接点击卡片选择 | OpenAI（Terra/Luna/Sol）或 DeepSeek（Flash/Pro） |
-| 允许列表 | 仅启用 Burp 时必填 | `127.0.0.1:9101` 或 `api.example.com:443` |
-| 认证头 | 目标 API 需要登录时才填写 | `Authorization: Bearer <token>` |
-| Burp 主机 / 端口 | 仅启用 Burp 时填写 | 通常保留 `127.0.0.1` / `8080` |
-| Burp CA PEM | 仅 HTTPS 且 Burp 解密 HTTPS 时填写 | `C:\certs\burp-ca.pem` |
+- 只读取本机代码与配置；不访问业务目标、不使用 Burp、不发起动态攻击。
+- 自动排除 `.git`、`node_modules`、`target`、`dist`、虚拟环境等目录。
+- 优先读取路由、认证、过滤器、拦截器、控制器和配置文件；大项目按上限抽取上下文。
+- 发送给 AI 前会脱敏常见 API Key、Token、密码和数据库连接串。
+- 报告要求模型只给出有证据的确认问题和待核实问题，并在信息不足时说明覆盖缺口。
 
-### 什么是认证头？
-
-很多 API 会先检查登录凭据，例如 `Authorization: Bearer <token>` 或 `X-API-Key: <key>`。把已有的测试账号令牌写在“认证头”中，工具在 **Burp 已启用时** 才会把它随受控验证请求发送给目标；本地演示不需要填写。认证头的值不会写进历史任务、报告或网页返回的数据。
-
-请使用权限最小、可撤销的测试凭据，绝不使用生产管理员令牌。
-
-## Burp Suite：需要时再启用
-
-如果只希望检查源码，保持“启用 Burp Suite 抓包和受控验证”未勾选即可。
-
-若确实需要验证：
-
-1. 先启动 Burp Suite，进入 `Proxy`，确认 listener 为 `127.0.0.1:8080`（或把实际地址填入表单）。
-2. 在 `Proxy` 中关闭 `Intercept is on`，否则 Burp 会等待人工点击，自动任务会超时。
-3. 勾选网页中的 Burp 选项，填入目标 URL 与同一目标的 `host:port` 允许列表。例如 URL 为 `http://127.0.0.1:9101`，允许列表就填 `127.0.0.1:9101`。
-4. 若目标是 HTTPS，导出 Burp CA 的 PEM 文件并在表单填入路径；否则证书校验会安全失败。
-5. 勾选已获授权确认框，再启动扫描。
-
-开启 Burp 后，工具仅对允许列表内的地址发送数量受限的无副作用探测；外部目标不会执行写入、删除、爆破、拒绝服务、内网/元数据探测或命令执行。重定向到允许列表外也会被拒绝。
-
-## 没有源码时：OpenAPI 黑盒扫描
-
-适用于你没有代码仓库、但拥有目标 API 的明确测试授权和 OpenAPI/Swagger 文档的情况。它不是“全自动攻击器”：OpenAPI 描述只能说明接口的输入面，不能单凭描述证明漏洞。
-
-1. 选择网页中的“**无源码：OpenAPI 黑盒**”。源码目录和语言选择会自动隐藏。
-2. 填写 API 基础地址，例如 `https://api.example.com`。
-3. 填写 OpenAPI 文档地址；若不填，工具会请求 `https://api.example.com/openapi.json`。支持 JSON 和 YAML。
-4. 在允许列表添加目标及文档的 `host:port`，例如 `api.example.com:443`。文档若位于另一台允许的主机，也需单独加入。
-5. 填写测试认证头（如果文档或接口需要登录）、配置 Burp，并勾选“我确认已获得授权”。HTTPS 目标还必须填写受信任的 Burp CA PEM 路径。
-6. 点击“启动扫描”。
-
-黑盒模式**强制经 Burp**，并且只会：
-
-- 请求一份不超过 1 MB 的 OpenAPI 文档；
-- 从文档中识别 URL/回调、重定向、文件路径类输入，以及敏感路径缺少安全声明等“需要复核的候选项”；
-- 最多访问你设置数量的、文档明确列出的、无必填参数的 `GET` 或 `HEAD` 接口；不会猜路径、猜参数、提交请求体，也不会调用 `POST`、`PUT`、`PATCH` 或 `DELETE`；
-- 在报告中仅保留请求 URL、HTTP 状态、响应类型和长度等摘要，不保存响应正文。
-
-报告里的 `api_surface` 表示“已抓取的 API 接口面”，不是漏洞；`WARNING` 候选项仍需要 AI 结论和人工证据复核。若 API 没有 OpenAPI 文档，也没有源码，当前版本会安全拒绝扫描，而不是盲目枚举或探测未知路径。
-
-## 内置本地演示：确实有目标 URL
-
-仓库内包含三个故意存在漏洞的**本地**服务。它们只有在启动演示后才是可访问的目标 URL，绝不能部署到任何环境。
-
-开发环境中打开 PowerShell，执行：
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m api_scan_tool demo
-```
-
-该命令会启动可用的示例服务（Python、Node.js、JDK 未安装的语言会显示跳过）。对应源码目录、URL 和允许列表如下：
-
-| 语言 | 源码目录 | 目标 URL | 允许列表 |
-| --- | --- | --- | --- |
-| Python | `examples\python_vulnerable` | `http://127.0.0.1:9101/fetch?url=http://127.0.0.1:9199/marker` | `127.0.0.1:9101` |
-| JavaScript | `examples\javascript_vulnerable` | `http://127.0.0.1:9102/file?name=../fixture-secret.txt` | `127.0.0.1:9102` |
-| Java | `examples\java_vulnerable` | `http://127.0.0.1:9103/run?cmd=echo%20api_scan_marker_9f3a` | `127.0.0.1:9103` |
-
-然后运行 Web 控制台，在表单中选择其中一行。若要看到 Burp 抓包，按上节启动 Burp、勾选 Burp 和授权确认；若没有 Burp，也可以不填目标 URL，直接完成该目录的 Semgrep 与 AI 复查。
-
-EXE 会打包扫描器和网页控制台；三个跨语言演示服务依赖外部 Python/Node.js/JDK，因此请用上面的开发环境命令启动它们。
-
-## 从源码运行（开发者）
+## 从源码启动
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
-notepad .env
-python -m api_scan_tool web
+python codecheck_launcher.py
 ```
 
-命令行也可使用：
+## 构建与交付 EXE
 
 ```powershell
-python -m api_scan_tool run --source .\examples\python_vulnerable
-python -m api_scan_tool run --source .\examples\python_vulnerable --target http://127.0.0.1:9101 --allow 127.0.0.1:9101 --use-burp --confirm-authorized
-python -m api_scan_tool openapi --target https://api.example.com --openapi-url https://api.example.com/openapi.json --allow api.example.com:443 --confirm-authorized --burp-ca C:\certs\burp-ca.pem
+powershell -ExecutionPolicy Bypass -File .\build_codecheck_exe.ps1
 ```
 
-网页使用固定的提供商与模型选择，不要求设置 `OPENAI_MODEL`。CLI 使用 DeepSeek 的示例：`python -m api_scan_tool run --source .\examples\python_vulnerable --ai-provider deepseek --model deepseek-flash`。
+交付整个 `release\Code-Check` 文件夹，不能只复制 `Code-Check.exe`；`_internal` 和 `.env.example` 都必须保留。
 
-## 报告与隐私
-
-每个任务会在 `runs` 目录生成 JSON、HTML 和 SARIF 报告，网页也可下载。发送给选中 AI 提供商的内容仅包括脱敏后的 Semgrep 命中片段和有限上下文。OpenAI 请求设置为 `store=false`；使用 DeepSeek 前请按其自身的数据政策评估。有关模型见 [OpenAI 模型目录](https://developers.openai.com/api/docs/models) 和 [DeepSeek API 文档](https://api-docs.deepseek.com/quick_start/pricing-details-cny/)。
-
-## 重新构建 EXE
-
-在开发环境执行：
+在另一台 Windows 电脑上使用前，先运行本机自检：
 
 ```powershell
-.\build_exe.ps1
+powershell -ExecutionPolicy Bypass -File .\test_codecheck_portable.ps1
 ```
 
-完成后将整个 `release\API-Scan-Tool` 文件夹交付给使用者；构建脚本会把 `.env.example` 一并放入该目录。
-
-默认构建会复用未变化的 Semgrep 运行器和 PyInstaller 缓存，因此后续只改网页或 Python 代码时会快很多。首次构建、升级 Semgrep 或需要完全干净的包时使用：
-
-```powershell
-.\build_exe.ps1 -Clean
-```
-
-只想强制重建 Semgrep 运行器时使用：
-
-```powershell
-.\build_exe.ps1 -RebuildSemgrep
-```
-
-若提示 `API-Scan-Tool.exe is still running`，浏览器页面关闭并不代表程序退出。可在任务管理器结束 `API-Scan-Tool.exe`，或直接使用：
-
-```powershell
-.\build_exe.ps1 -StopRunning
-```
-
-构建脚本默认不会重复下载或检查全部依赖，首次安装依赖、更新依赖后或提示缺少依赖时才使用：
-
-```powershell
-.\build_exe.ps1 -InstallDependencies
-```
+自检会启动 EXE、请求本机健康检查接口、再停止它。目标电脑需要 64 位 Windows；不需要安装 Python、Node.js、Semgrep 或 Burp。联网仅在用户实际提交审查任务、调用选择的 AI 提供商时需要。
